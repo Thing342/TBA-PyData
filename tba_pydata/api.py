@@ -1,8 +1,9 @@
+from enum import Enum
+from multiprocessing import Pool
+
 import requests
 import pandas
 import re
-
-from multiprocessing import Pool
 
 from tba_pydata import constants
 
@@ -11,6 +12,8 @@ HEADER = {'X-TBA-Auth_Key': 'SfIaTaudX9MLcouEO0NbEktueyhKcNJ8PlBlrHuw4yXWx1D30fV
 YEAR = 2017
 
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
+
+# TODO: format = 'list'
 
 def tba_fetch(path):
     resp = requests.get(TBA + path, headers=HEADER)
@@ -56,23 +59,33 @@ def normalize_team_key(team, out_format='tba'):
             return normalize_team_key(int(team), out_format)
 
 
+def opp(alliance):
+    alliance = alliance.lower()
+    return 'blue' if alliance == 'red' else 'red'
+
+
+# ------------------------
+
+
 def status():
     res = tba_fetch('/status')
     return pandas.Series(res)
 
 
-def teams(page=-1, year=None, form=None):
+def teams(page=-1, year=None, form=None, district=None):
+    url = ("/district/%s/teams/" % district) if district is not None else '/teams/'
+
     if page != -1:
         if year is None:
             if form is None:
-                res = tba_fetch('/teams/' + str(page))
+                res = tba_fetch(url + str(page))
             else:
-                res = tba_fetch('/teams/%d/%s' % (page, form))
+                res = tba_fetch(url + '%d/%s' % (page, form))
         else:
             if form is None:
-                res = tba_fetch('/teams/%d/%d' % (year, page))
+                res = tba_fetch(url + '%d/%d' % (year, page))
             else:
-                res = tba_fetch('/teams/%d/%d/%s' % (year, page, form))
+                res = tba_fetch(url + '%d/%d/%s' % (year, page, form))
 
         if len(res) == 0:
             return None
@@ -85,14 +98,14 @@ def teams(page=-1, year=None, form=None):
         pages = range(15)
         if year is None:
             if form is None:
-                paths = ('/teams/' + str(page) for page in pages)
+                paths = (url + str(page) for page in pages)
             else:
-                paths = ('/teams/%d/%s' % (page, form) for page in pages)
+                paths = (url + '%d/%s' % (page, form) for page in pages)
         else:
             if form is None:
-                paths = ('/teams/%d/%d' % (year, page) for page in pages)
+                paths = (url + '%d/%d' % (year, page) for page in pages)
             else:
-                paths = ('/teams/%d/%d/%s' % (year, page, form) for page in pages)
+                paths = (url + '%d/%d/%s' % (year, page, form) for page in pages)
 
         res = tba_fetch_many(paths)
         if form == 'keys':
@@ -108,6 +121,142 @@ def teams(page=-1, year=None, form=None):
     return data
 
 
-def matches(team=None, event=None, year=YEAR, form=None):
+def events(team=None, year=None, form=None, district=None):
     if team is not None:
-        url_base = '/team/%s'
+        team = normalize_team_key(team)
+        url = "/team/%s/events" % team
+        if year is not None:
+            url += "/" + str(year)
+
+        if form is not None:
+            url += "/" + form
+
+        res = tba_fetch(url)
+        if form == 'keys':
+            return pandas.Series(res)
+        else:
+            data = pandas.DataFrame(res)
+    else:
+        if district is not None:
+            url = "/district/%s/" % district
+        else:
+            url = "/"
+
+        url += "events"
+        if year is not None:
+            url += "/" + str(year)
+
+        if form is not None:
+            url += "/" + form
+
+        res = tba_fetch(url)
+        if form == 'keys':
+            return pandas.Series(res)
+        else:
+            data = pandas.DataFrame(res)
+
+    data['district'] = data.district.apply(lambda val: val['abbreviation'] if val is not None else None)
+    data.index = data['key']
+    return data
+
+
+def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, event_predicate=None, district=None):
+    year = year if district is None else None
+    if team is not None:
+        team = normalize_team_key(team)
+        url_bits = ['team', team]
+
+        if event is not None:
+            url_bits.append('event')
+            url_bits.append(event)
+
+        url_bits.append('matches')
+        if event is None:
+            url_bits.append(str(year))
+        if form is not None:
+            url_bits.append(form)
+
+        url = '/' + '/'.join(url_bits)
+        res = tba_fetch(url)
+
+        if form == 'keys':
+            return pandas.Series(res)
+
+        df = pandas.DataFrame(res)
+        df.index = df['key']
+
+        for index, record in df.iterrows():
+            alliances = record.alliances
+            alliance = 'red' if team in alliances['red']['team_keys'] else 'blue'
+            df.at[index, 'alliance'] = alliance
+
+            i = 1
+            for team_key in alliances[alliance]['team_keys']:
+                df.at[index, alliance + str(i)] = team_key
+                if team_key == team:
+                    df.at[index, 'position'] = alliance + str(i)
+                i += 1
+
+            i = 1
+            for team_key in alliances[opp(alliance)]['team_keys']:
+                df.at[index, opp(alliance) + str(i)] = team_key
+                i += 1
+
+            if team in alliances[alliance]['surrogate_team_keys']:
+                df.at[index, 'was_surrogate'] = True
+
+            df.at[index, 'score'] = alliances[alliance]['score']
+            df.at[index, 'opp_score'] = alliances[opp(alliance)]['score']
+
+            if form is None and score_parsing_fn is not None:
+                score_parsing_fn(df, index, alliance)
+
+        return df
+
+    elif event is not None:
+        url_bits = ['event', event, 'matches']
+        if form is not None:
+            url_bits.append(form)
+
+        url = '/' + '/'.join(url_bits)
+        res = tba_fetch(url)
+
+    else:
+        assert (year is not None or district is not None)
+        if event_predicate is None:
+            event_keys = events(team=team, year=year, district=district, form='keys')
+        else:
+            event_keys = events(team=team, year=year, district=district, form='simple').index
+
+        if form is None:
+            path_gen = ("/event/%s/matches" % v for v in event_keys)
+        else:
+            path_gen = ("/event/%s/matches/%s" % (v, form) for v in event_keys)
+
+        res = tba_fetch_many(path_gen)
+
+    if form == 'keys':
+        return pandas.Series(res)
+
+    df = pandas.DataFrame(res)
+    df.index = df['key']
+
+    for index, record in df.iterrows():
+        alliances = record.alliances
+
+        i = 1
+        for team_key in alliances['blue']['team_keys']:
+            df.at[index, 'blue' + str(i)] = team_key
+            if team_key == team:
+                df.at[index, 'position'] = 'blue' + str(i)
+            i += 1
+
+        i = 1
+        for team_key in alliances['red']['team_keys']:
+            df.at[index, 'red' + str(i)] = team_key
+            i += 1
+
+        df.at[index, 'red_score'] = alliances['red']['score']
+        df.at[index, 'blue_score'] = alliances['blue']['score']
+
+    return df
