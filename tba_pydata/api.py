@@ -1,5 +1,6 @@
 import requests
 import pandas
+import re
 
 from multiprocessing import Pool
 
@@ -7,8 +8,9 @@ from tba_pydata import constants
 
 TBA = 'https://www.thebluealliance.com/api/v3'
 HEADER = {'X-TBA-Auth_Key': 'SfIaTaudX9MLcouEO0NbEktueyhKcNJ8PlBlrHuw4yXWx1D30fVQxtLHERg7QZVG'}
-YEAR = 2018
+YEAR = 2017
 
+TEAM_REGEX = re.compile(r'frc([0-9]+).*')
 
 def tba_fetch(path):
     resp = requests.get(TBA + path, headers=HEADER)
@@ -28,6 +30,30 @@ def tba_fetch_many(paths, concat=True):
         total += sublist
 
     return total
+
+
+def normalize_team_key(team, out_format='tba'):
+    if isinstance(team, int):
+        if out_format == 'int':
+            return team
+        elif out_format == 'str':
+            return 'frc%04d' % team
+        elif out_format == 'tba':
+            return 'frc%d' % team
+        else:
+            return None
+    elif isinstance(team, str):
+        matches = TEAM_REGEX.match(team)
+        if matches:
+            num = matches.group(1)
+            if out_format == 'str':
+                return 'frc%04d' % int(num)
+            elif out_format == 'int':
+                return int(num)
+            elif out_format == 'tba':
+                return 'frc%d' % int(num)
+        else:
+            return normalize_team_key(int(team), out_format)
 
 
 def status():
@@ -77,6 +103,11 @@ def teams(page=-1, year=None, form=None):
     champs_year = '2018' if (year is None or year < 2017) else str(year)
     data['home_championship'] = data.home_championship.apply(lambda val: val[champs_year] if val is not None else None)
     data['state_prov'] = data.state_prov.apply(lambda loc: constants.STATE_PROV_NORMALIZATION[loc])
-    data.index = data['key']
+    data.index = data['team_number']
 
     return data
+
+
+def matches(team=None, event=None, year=YEAR, form=None):
+    if team is not None:
+        url_base = '/team/%s'
