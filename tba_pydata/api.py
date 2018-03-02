@@ -13,6 +13,7 @@ YEAR = 2017
 
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
 
+
 # TODO: format = 'list'
 
 def tba_fetch(path):
