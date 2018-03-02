@@ -8,7 +8,7 @@ import re
 from tba_pydata import constants
 
 TBA = 'https://www.thebluealliance.com/api/v3'
-HEADER = {'X-TBA-Auth_Key': 'SfIaTaudX9MLcouEO0NbEktueyhKcNJ8PlBlrHuw4yXWx1D30fVQxtLHERg7QZVG'}
+HEADER = {'X-TBA-Auth_Key': '???'}
 YEAR = 2017
 
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
