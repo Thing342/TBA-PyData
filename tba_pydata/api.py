@@ -8,7 +8,7 @@ import re
 from tba_pydata import constants
 
 TBA = 'https://www.thebluealliance.com/api/v3'
-HEADER = {'X-TBA-Auth_Key': '???'}
+HEADER = {'X-TBA-Auth_Key': 'GwZjICvp9BGW8J95fKWnrszb8JH9PvYDvjvyqzGrqP62IrLZS1XGROC2UErVR9DL'}
 YEAR = 2017
 
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
@@ -209,8 +209,8 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
             df.at[index, 'score'] = alliances[alliance]['score']
             df.at[index, 'opp_score'] = alliances[opp(alliance)]['score']
 
-            if form is None and score_parsing_fn is not None:
-                score_parsing_fn(df, index, alliance)
+        if form is None and score_parsing_fn is not None:
+            return df.apply(score_parsing_fn, axis=1)
 
         return df
 
@@ -227,7 +227,8 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
         if event_predicate is None:
             event_keys = events(team=team, year=year, district=district, form='keys')
         else:
-            event_keys = events(team=team, year=year, district=district, form='simple').index
+            evs = events(team=team, year=year, district=district)
+            event_keys = evs[event_predicate(evs)].index
 
         if form is None:
             path_gen = ("/event/%s/matches" % v for v in event_keys)
@@ -260,4 +261,42 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
         df.at[index, 'red_score'] = alliances['red']['score']
         df.at[index, 'blue_score'] = alliances['blue']['score']
 
+    if form is None and score_parsing_fn is not None:
+        return df[df.red_score != -1].apply(score_parsing_fn, axis=1)
+
     return df
+
+
+def event_finish(event):
+    ranks = tba_fetch('/event/%s/rankings' % event)
+    alliances = tba_fetch('/event/%s/alliances' % event)
+
+    table = {}
+    for rank in ranks['rankings']:
+        record = {
+            'rank': rank['rank'],
+            'wins': rank['record']['wins'],
+            'ties': rank['record']['ties'],
+            'losses': rank['record']['losses'],
+            'pick': -1,
+            'seed': -1,
+            'finish': 'np'
+        }
+
+        for i, cat in enumerate(ranks['sort_order_info']):
+            record[cat['name']] = rank['sort_orders'][i]
+
+        table[rank['team_key']] = record
+
+    for i, alliance in enumerate(alliances):
+        if alliance['status']['status'] == 'won':
+            finish = 'won'
+        else:
+            finish = alliance['status']['level']
+
+        for role, team in enumerate(alliance['picks']):
+            table[team]['pick'] = role
+            table[team]['seed'] = i+1
+            table[team]['finish'] = finish
+
+    return pandas.DataFrame.from_dict(table, orient='index')
