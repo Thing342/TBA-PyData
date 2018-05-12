@@ -13,10 +13,15 @@ YEAR = 2018
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
 
 
-def config(tba_key=None, endpoint='https://www.thebluealliance.com/api/v3', year=2018, **kwargs):
-    HEADER = {'X-TBA-Auth_Key': tba_key}
-    TBA = endpoint,
-    YEAR = year,
+def config(key=None, endpoint='https://www.thebluealliance.com/api/v3', year=2018, **kwargs):
+    global HEADER
+    HEADER['X-TBA-Auth_Key'] = key
+    global TBA
+    TBA = endpoint
+    global YEAR
+    YEAR = year
+
+    print(str(HEADER))
 
 
 # ------------------------
@@ -189,35 +194,36 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
         if form == 'keys':
             return pandas.Series(res)
 
-        df = pandas.DataFrame(res)
-        df.index = df['key']
-
-        for index, record in df.iterrows():
-            alliances = record.alliances
+        data = []
+        for entry in res:
+            row = entry
+            alliances = entry['alliances']
             alliance = 'red' if team in alliances['red']['team_keys'] else 'blue'
-            df.at[index, 'alliance'] = alliance
+            row['alliance'] = alliance
 
             i = 1
             for team_key in alliances[alliance]['team_keys']:
-                df.at[index, alliance + str(i)] = team_key
+                row[alliance + str(i)] = team_key
                 if team_key == team:
-                    df.at[index, 'position'] = alliance + str(i)
+                    row['position'] = alliance + str(i)
                 i += 1
 
             i = 1
             for team_key in alliances[opp(alliance)]['team_keys']:
-                df.at[index, opp(alliance) + str(i)] = team_key
+                row[opp(alliance) + str(i)] = team_key
                 i += 1
 
             if team in alliances[alliance]['surrogate_team_keys']:
-                df.at[index, 'was_surrogate'] = True
+                row['was_surrogate'] = True
 
-            df.at[index, 'score'] = alliances[alliance]['score']
-            df.at[index, 'opp_score'] = alliances[opp(alliance)]['score']
+            row['score'] = alliances[alliance]['score']
+            row['opp_score'] = alliances[opp(alliance)]['score']
 
-        if form is None and score_parsing_fn is not None:
-            return df.apply(score_parsing_fn, axis=1)
+            row = score_parsing_fn(row) if (form is None and score_parsing_fn is not None) else row
+            data.append(row)
 
+        df = pandas.DataFrame(data)
+        df.index = df['key']
         return df
 
     elif event is not None:
