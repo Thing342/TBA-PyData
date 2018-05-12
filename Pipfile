@@ -12,3 +12,4 @@ statsmodels = "*"
 requests = "*"
 
 [dev-packages]
+twine = "*"
