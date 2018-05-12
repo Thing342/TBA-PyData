@@ -7,12 +7,13 @@ import pandas
 import statsmodels.api as sm
 
 
-def get_opr_matrices(df, score_col='score'):
+def get_opr_matrices(df, teams=None, score_col='score'):
     red_score = 'red_' + score_col
     blue_score = 'blue_' + score_col
     df = df[['key', red_score, blue_score, 'red1', 'red2', 'red3', 'blue1', 'blue2', 'blue3']]
     melted = pandas.melt(df, ['key', red_score, blue_score]).sort_values('value')
-    teams = melted.value.unique()
+    if teams is None:
+        teams = melted.value.unique()
     scores = pandas.melt(df[['key', red_score, blue_score]], ['key']).sort_values('key')
     scores.index = scores.key + '_' + scores.variable
     oprmat = pandas.DataFrame(0, index=scores.key + '_' + scores.variable, columns=teams)
