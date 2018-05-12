@@ -1,20 +1,26 @@
-from enum import Enum
+import re
 from multiprocessing import Pool
 
-import requests
 import pandas
-import re
+import requests
 
 from tba_pydata import constants
 
 TBA = 'https://www.thebluealliance.com/api/v3'
-HEADER = {'X-TBA-Auth_Key': 'GwZjICvp9BGW8J95fKWnrszb8JH9PvYDvjvyqzGrqP62IrLZS1XGROC2UErVR9DL'}
-YEAR = 2017
+HEADER = {'X-TBA-Auth_Key': ''}
+YEAR = 2018
 
 TEAM_REGEX = re.compile(r'frc([0-9]+).*')
 
 
-# TODO: format = 'list'
+def config(tba_key=None, endpoint='https://www.thebluealliance.com/api/v3', year=2018, **kwargs):
+    HEADER = {'X-TBA-Auth_Key': tba_key}
+    TBA = endpoint,
+    YEAR = year,
+
+
+# ------------------------
+
 
 def tba_fetch(path):
     resp = requests.get(TBA + path, headers=HEADER)
