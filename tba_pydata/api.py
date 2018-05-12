@@ -219,8 +219,13 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
             row['score'] = alliances[alliance]['score']
             row['opp_score'] = alliances[opp(alliance)]['score']
 
-            row = score_parsing_fn(row) if (form is None and score_parsing_fn is not None) else row
-            data.append(row)
+            if form is None and score_parsing_fn is not None:
+                if row['score'] != -1:
+                    data.append(score_parsing_fn(row))
+                else:
+                    pass
+            else:
+                data.append(row)
 
         df = pandas.DataFrame(data)
         df.index = df['key']
@@ -252,30 +257,37 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
     if form == 'keys':
         return pandas.Series(res)
 
-    df = pandas.DataFrame(res)
-    df.index = df['key']
+    #df = pandas.DataFrame(res)
+    #df.index = df['key']
 
-    for index, record in df.iterrows():
-        alliances = record.alliances
+    data = []
+    for entry in res:
+        row = entry
+        alliances = entry['alliances']
 
         i = 1
         for team_key in alliances['blue']['team_keys']:
-            df.at[index, 'blue' + str(i)] = team_key
-            if team_key == team:
-                df.at[index, 'position'] = 'blue' + str(i)
+            row['blue' + str(i)] = team_key
             i += 1
 
         i = 1
         for team_key in alliances['red']['team_keys']:
-            df.at[index, 'red' + str(i)] = team_key
+            row['red' + str(i)] = team_key
             i += 1
 
-        df.at[index, 'red_score'] = alliances['red']['score']
-        df.at[index, 'blue_score'] = alliances['blue']['score']
+        row['red_score'] = alliances['red']['score']
+        row['blue_score'] = alliances['blue']['score']
 
-    if form is None and score_parsing_fn is not None:
-        return df[df.red_score != -1].apply(score_parsing_fn, axis=1)
+        if form is None and score_parsing_fn is not None:
+            if row['score'] != -1:
+                data.append(score_parsing_fn(row))
+            else:
+                pass
+        else:
+            data.append(row)
 
+    df = pandas.DataFrame(data)
+    df.index = df['key']
     return df
 
 
