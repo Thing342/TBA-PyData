@@ -1,14 +1,9 @@
-from numpy import arctanh, tanh
-import pandas
-import statsmodels.api as sm
-
-
-def scoring(series):
+def scoring(row):
     def setf(alliance, segment, field, value):
-        series['_'.join([alliance, segment, field])] = value
+        row['_'.join([alliance, segment, field])] = value
 
     for alliance in ['red', 'blue']:
-        breakdown = series['score_breakdown'][alliance]
+        breakdown = row['score_breakdown'][alliance]
 
         setf(alliance, 'total', 'adjustment', breakdown['adjustPoints'])
         setf(alliance, 'total', 'foul', breakdown['foulPoints'])
@@ -69,48 +64,4 @@ def scoring(series):
         setf(alliance, 'endgame', 'rp', breakdown['faceTheBossRankingPoint'])
         setf(alliance, 'endgame', 'points', breakdown['endgamePoints'])
 
-    return series
-
-
-def psr_transform(x):
-    return 2 * arctanh(((x + 2) / 138) - 1)
-
-
-def psr_untransform(x):
-    return (tanh(x / 2) + 1) * 138 / 3
-
-
-def get_psr_matrices(df, score_col='score'):
-    red_score = 'red_' + score_col
-    blue_score = 'blue_' + score_col
-    df = df[['key', red_score, blue_score, 'red1', 'red2', 'red3', 'blue1', 'blue2', 'blue3']]
-    melted = pandas.melt(df, ['key', red_score, blue_score]).sort_values('value')
-    teams = melted.value.unique()
-    scores = pandas.melt(df[['key', red_score, blue_score]], ['key']).sort_values('key')
-    scores.index = scores.key + '_' + scores.variable
-    oprmat = pandas.DataFrame(0, index=scores.key + '_' + scores.variable, columns=teams)
-
-    for (i, record) in melted.iterrows():
-        if record.variable.startswith('blue'):
-            oprmat.loc[record.key + '_' + blue_score, record.value] = 1
-            oprmat.loc[record.key + '_' + red_score, record.value] = -1
-        if record.variable.startswith('red'):
-            oprmat.loc[record.key + '_' + blue_score, record.value] = -1
-            oprmat.loc[record.key + '_' + red_score, record.value] = 1
-
-    return oprmat, teams, scores
-
-
-def get_psr_model(df, fit=True):
-    df = df[df.comp_level == 'qm']
-    df['red_ownership_norm'] = 2 * arctanh(((df.red_ownership_scale_sec + df.red_ownership_switch_sec + 2) / 139) - 1)
-    df['blue_ownership_norm'] = 2 * arctanh(((df.blue_ownership_scale_sec + df.blue_ownership_switch_sec + 2) / 139) - 1)
-    #df['red_ownership_norm'] = psr_transform(df.red_ownership_switch_sec + df.red_ownership_scale_sec)
-    #df['blue_ownership_norm'] = psr_transform(df.blue_ownership_switch_sec + df.blue_ownership_scale_sec)
-    oprmat, teams, scores = get_psr_matrices(df, score_col='ownership_norm')
-    reg = sm.OLS(scores.value, oprmat)
-
-    if fit:
-        return reg.fit()
-    else:
-        return reg
+    return row

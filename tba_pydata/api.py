@@ -257,9 +257,6 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
     if form == 'keys':
         return pandas.Series(res)
 
-    #df = pandas.DataFrame(res)
-    #df.index = df['key']
-
     data = []
     for entry in res:
         row = entry
@@ -279,7 +276,7 @@ def matches(team=None, event=None, year=YEAR, form=None, score_parsing_fn=None, 
         row['blue_score'] = alliances['blue']['score']
 
         if form is None and score_parsing_fn is not None:
-            if row['score'] != -1:
+            if row['red_score'] != -1:
                 data.append(score_parsing_fn(row))
             else:
                 pass
