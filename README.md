@@ -4,7 +4,7 @@
 
 **License:** MIT
 
-**Latest Version:** 0.1.0a1 (under heavy development)
+**Latest Version:** 0.1.1 (under heavy development)
 
 **Purpose:** To serve as a wrapper for the [The Blue Alliance](https://www.thebluealliance.com/) API for use with the 
 PyData statistical stack. (Eg. `pandas`, `numpy`, etc)
