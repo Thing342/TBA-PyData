@@ -109,4 +109,4 @@ doc/source/styled.xlsx
 doc/source/templates/
 env/
 
-.ipynb
+*.ipynb

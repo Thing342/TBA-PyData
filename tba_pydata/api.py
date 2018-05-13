@@ -321,3 +321,65 @@ def event_finish(event):
             table[team]['finish'] = finish
 
     return pandas.DataFrame.from_dict(table, orient='index')
+
+
+def statuses(event=None, team=None, year=YEAR):
+    def helper(entry, event_key):
+        row = {}
+
+        qual = entry['qual']
+        ranking = qual['ranking']
+
+        row['num_teams'] = qual['num_teams']
+        row['team_key'] = ranking['team_key']
+        row['event_key'] = event_key
+
+        row['qual_dq'] = ranking['dq']
+        row['qual_matches_played'] = ranking['matches_played']
+        row['qual_average'] = ranking['qual_average']
+        row['qual_rank'] = ranking['rank']
+        row['qual_wins'] = ranking['record']['wins']
+        row['qual_ties'] = ranking['record']['ties']
+        row['qual_losses'] = ranking['record']['losses']
+
+        for i, cat in enumerate(qual['sort_order_info']):
+            row[cat['name']] = ranking['sort_orders'][i]
+
+        if 'alliance' in entry and entry['alliance'] is not None:
+            alliance = entry['alliance']
+            row['seed'] = alliance['number']
+            row['pick'] = alliance['pick']
+
+        if 'playoff' in entry and entry['playoff'] is not None:
+            playoff = entry['playoff']
+            row['elim_status'] = playoff['status']
+            row['elim_level'] = playoff['level']
+            row['finish'] = "won" if playoff['status'] == "won" else playoff['level']
+            row['elim_wins'] = playoff['record']['wins']
+            row['elim_ties'] = playoff['record']['ties']
+            row['elim_losses'] = playoff['record']['losses']
+        else:
+            row['elim_status'] = 'eliminated'
+            row['elim_level'] = 'qm'
+            row['finish'] = 'np'
+            row['elim_wins'] = 0
+            row['elim_ties'] = 0
+            row['elim_losses'] = 0
+
+        return row
+
+    if event is not None and team is not None:
+        res = tba_fetch('/team/' + team + "/event/" + event + "/status")
+        return pandas.Series(helper(res, event))
+    elif team is not None:
+        res = tba_fetch('/team/' + team + "/events/" + str(year) + "/statuses")
+        df = pandas.DataFrame([helper(val, event_key) for event_key, val in res.items()])
+        df.index = df['event_key']
+        return df
+    elif event is not None:
+        res = tba_fetch('/event/' + event + '/teams/statuses')
+        df = pandas.DataFrame([helper(val, event) for team_key, val in res.items()])
+        df.index = df['team_key']
+        return df
+    else:
+        raise ValueError("One of team or event must be set. (cannot be None)")
